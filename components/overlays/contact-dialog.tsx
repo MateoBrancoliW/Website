@@ -27,12 +27,16 @@ export function ContactDialog({ open, onOpenChange }: Props) {
 
         <form action={formAction} className="space-y-4" aria-describedby="contact-desc">
           <p id="contact-desc" className="text-sm text-muted-foreground">
-            Share some details and I’ll get back to you.
+            Share some details and I’ll get back to you in one to five business days.
           </p>
 
           <div className="grid gap-2">
             <Label htmlFor="name">Name</Label>
-            <Input id="name" name="name" placeholder="Your name" aria-invalid={!!state.errors.name} />
+            <Input 
+              id="name" 
+              name="name" 
+              //placeholder="Your name" 
+              aria-invalid={!!state.errors.name} />
             {state.errors.name ? <p className="text-xs text-red-600">{state.errors.name}</p> : null}
           </div>
 
@@ -42,7 +46,7 @@ export function ContactDialog({ open, onOpenChange }: Props) {
               id="email"
               name="email"
               type="email"
-              placeholder="you@example.com"
+              //placeholder="you@example.com"
               aria-invalid={!!state.errors.email}
             />
             {state.errors.email ? <p className="text-xs text-red-600">{state.errors.email}</p> : null}
@@ -53,7 +57,7 @@ export function ContactDialog({ open, onOpenChange }: Props) {
             <Textarea
               id="message"
               name="message"
-              placeholder="What would you like to make?"
+              //placeholder="What would you like to make?"
               rows={5}
               aria-invalid={!!state.errors.message}
             />
@@ -66,7 +70,7 @@ export function ContactDialog({ open, onOpenChange }: Props) {
                 <span className={state.ok ? "text-green-700" : "text-red-700"}>{state.message}</span>
               ) : (
                 <span className="text-muted-foreground">
-                  {pending ? "Sending..." : "I usually reply within a day."}
+                  {pending ? "Sending..." : "Thank you for reaching out!"}
                 </span>
               )}
             </div>

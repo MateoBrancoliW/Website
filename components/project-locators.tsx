@@ -3,7 +3,6 @@
 import Image from "next/image"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
-import { useOverlayNav } from "./use-overlay-nav"
 
 type Percent = { x: number; y: number }
 type NDC = { x: number; y: number; z?: number }
@@ -45,7 +44,6 @@ function toPercent(pos?: { percent?: Percent; ndc?: NDC }): { p?: Percent; visib
 }
 
 export function ProjectLocatorsOverlay({ items, className, fixed = false }: Props) {
-  const { openProject } = useOverlayNav()
   const containerRef = useRef<HTMLDivElement>(null)
   const [hoverId, setHoverId] = useState<string | null>(null)
   const [overrides, setOverrides] = useState<Record<string, { x: number; y: number; visible: boolean }>>({})
@@ -75,61 +73,56 @@ export function ProjectLocatorsOverlay({ items, className, fixed = false }: Prop
     return () => window.removeEventListener("locators:update", onUpdate as EventListener)
   }, [])
 
+  // Event bridge from the 3D scene: which mesh (if any) is currently hovered.
+  // The canvas dispatches `locators:hover` with { id: string | null }.
+  useEffect(() => {
+    function onHover(e: Event) {
+      const ev = e as CustomEvent<{ id: string | null }>
+      setHoverId(ev.detail?.id ?? null)
+    }
+    window.addEventListener("locators:hover", onHover as EventListener)
+    return () => window.removeEventListener("locators:hover", onHover as EventListener)
+  }, [])
+
   return (
     <div
       ref={containerRef}
       className={cn("pointer-events-none z-20", fixed ? "fixed inset-0" : "absolute inset-0", className)}
     >
+      {/*
+        Title buttons used to render here. They've been removed so they no longer
+        intercept pointer events over the 3D meshes (which now own hover/click).
+        The locator positions are still tracked in `resolved` so any future
+        DOM-anchored UI (tooltips, magnetic hints) can latch onto them.
+      */}
       {resolved.map((it) => {
+        const isHover = hoverId === it.id
+        if (!isHover) return null
         const { x, y } = it.position
         const left = `${x * 100}%`
         const top = `${y * 100}%`
-        const anchor = it.anchor ?? "center"
-        let translate = "-50% -50%"
-        if (anchor === "top-left") translate = "0% 0%"
-        if (anchor === "top-right") translate = "-100% 0%"
-        if (anchor === "bottom-left") translate = "0% -100%"
-        if (anchor === "bottom-right") translate = "-100% -100%"
-
-        const isHover = hoverId === it.id
-
         return (
           <div
             key={it.id}
             className={cn("absolute transition-opacity", it.visible ? "opacity-100" : "opacity-0")}
-            style={{ left, top, transform: `translate(${translate})` }}
+            style={{ left, top, transform: "translate(-50%, -50%)" }}
           >
-            {/* Marker */}
-            <button
-              type="button"
-              onClick={() => (it.slug ? openProject(it.slug!) : it.href ? (location.href = it.href) : null)}
-              onMouseEnter={() => setHoverId(it.id)}
-              onMouseLeave={() => setHoverId((id) => (id === it.id ? null : id))}
-              className="pointer-events-auto grid place-items-center rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-gray-900 shadow-sm backdrop-blur transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-black/50"
-              aria-label={it.title}
-            >
-              {it.title}
-            </button>
-
-            {/* Hover preview */}
-            {isHover ? (
-              <div className="pointer-events-none absolute left-1/2 top-[calc(100%+12px)] z-10 -translate-x-1/2 whitespace-normal">
-                <div className="w-56 overflow-hidden rounded-xl border border-black/10 bg-white/90 shadow-lg backdrop-blur">
-                  <div className="relative aspect-[3/2] w-full bg-gray-100">
-                    <Image
-                      src={it.image ?? "/placeholder.svg?height=240&width=360&query=minimal%20project%20preview"}
-                      alt={`${it.title} preview`}
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-                  <div className="p-3">
-                    <div className="text-xs font-medium text-gray-900">{it.title}</div>
-                    <div className="mt-1 line-clamp-3 text-[11px] text-gray-600">{it.description}</div>
-                  </div>
+            <div className="pointer-events-none absolute left-1/2 top-[calc(100%+12px)] z-10 -translate-x-1/2 whitespace-normal">
+              <div className="w-56 overflow-hidden rounded-xl border border-black/10 bg-white/90 shadow-lg backdrop-blur">
+                <div className="relative aspect-[3/2] w-full bg-gray-100">
+                  <Image
+                    src={it.image ?? "/placeholder.svg?height=240&width=360&query=minimal%20project%20preview"}
+                    alt={`${it.title} preview`}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+                <div className="p-3">
+                  <div className="text-xs font-medium text-gray-900">{it.title}</div>
+                  <div className="mt-1 line-clamp-3 text-[11px] text-gray-600">{it.description}</div>
                 </div>
               </div>
-            ) : null}
+            </div>
           </div>
         )
       })}

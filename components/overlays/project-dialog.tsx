@@ -20,8 +20,20 @@ export function ProjectDialog({ slug, open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0 sm:max-w-[900px] w-[calc(100vw-2rem)]">
-        <ScrollArea className="h-[85svh]">
+      {/*
+        Wider + taller + fully opaque. The previous size (900px) felt cramped;
+        bumping to ~1200px and 92svh makes the dialog the dominant focus
+        surface. `bg-white` overrides the theme variable so there's zero
+        transparency against the WebGL scene behind the backdrop.
+      */}
+      <DialogContent
+        className="
+          p-0 overflow-hidden
+          w-[calc(100vw-2rem)] sm:max-w-[1200px]
+          bg-white border-black/10 shadow-2xl
+        "
+      >
+        <ScrollArea className="h-[92svh]">
           <article className="prose prose-neutral mx-auto max-w-none">
             <div className="relative aspect-[16/9] w-full overflow-hidden">
               <Image
@@ -32,12 +44,12 @@ export function ProjectDialog({ slug, open, onOpenChange }: Props) {
                 priority
               />
             </div>
-            <div className="px-6 pb-10 pt-6">
-              <h1 className="mb-2 text-2xl font-semibold tracking-tight">{project.title}</h1>
-              <p className="mb-6 text-muted-foreground">{project.excerpt}</p>
+            <div className="px-8 pb-14 pt-8 md:px-12">
+              <h1 className="mb-3 text-3xl font-semibold tracking-tight md:text-4xl">{project.title}</h1>
+              <p className="mb-6 text-lg text-muted-foreground">{project.excerpt}</p>
               <Separator className="my-6" />
               {project.content.map((para, idx) => (
-                <p key={idx}>{para}</p>
+                <p key={idx} className="leading-relaxed">{para}</p>
               ))}
             </div>
           </article>

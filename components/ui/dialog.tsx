@@ -38,7 +38,11 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50",
+        // Fully TRANSPARENT backdrop — the 3D scene stays fully visible
+        // around the dialog. The dialog itself is solid white (see
+        // DialogContent), so the focus surface is opaque but everything
+        // around it stays alive.
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-transparent",
         className
       )}
       {...props}
