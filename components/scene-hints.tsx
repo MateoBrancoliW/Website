@@ -32,6 +32,18 @@ function ndcToPercent(ndc?: { x: number; y: number; z?: number }) {
   return insideClip && insideViewport ? { x, y } : null
 }
 
+// Same as ndcToPercent but does NOT clamp to the viewport — returns the
+// percent even when the point is outside [0,1]. Used by the mesh hint so it
+// can follow the mesh OFF-screen instead of getting stuck at the last
+// visible position. We still return null when the point is behind the
+// camera (z outside the clip range), since projection wraps around in that
+// case and the result is meaningless.
+function ndcToRawPercent(ndc?: { x: number; y: number; z?: number }) {
+  if (!ndc) return null
+  if (ndc.z !== undefined && (ndc.z < -1 || ndc.z > 1)) return null
+  return { x: (ndc.x + 1) / 2, y: (1 - ndc.y) / 2 }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Scroll hint — bouncing arrow at viewport bottom-LEFT
 //
@@ -136,6 +148,8 @@ function BouncingChevron() {
 const DEFAULT_PIN_SLUG = "about-me"
 
 function MeshHint({ pinTo = DEFAULT_PIN_SLUG }: { pinTo?: string }) {
+  // `pos` may be outside [0, 1] — the hint slides off-screen with the mesh.
+  // It's only `null` when the mesh is behind the camera (no valid projection).
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
   const [dismissed, setDismissed] = useState(false)
 
@@ -143,11 +157,10 @@ function MeshHint({ pinTo = DEFAULT_PIN_SLUG }: { pinTo?: string }) {
     function onUpdate(e: Event) {
       const ev = e as LocatorUpdate
       if (ev.detail?.id !== pinTo) return
-      const p = ev.detail.percent ?? ndcToPercent(ev.detail.ndc)
-      // If the mesh is off-screen for a moment (back of sphere), `p` will be
-      // null and we just stop updating — the hint will hold at its last
-      // visible position until the mesh swings back around.
-      if (p) setPos(p)
+      // Use the raw (un-clamped) percent so the hint can travel off-screen
+      // with the mesh; null only when the mesh is behind the camera.
+      const p = ndcToRawPercent(ev.detail.ndc) ?? ev.detail.percent ?? null
+      setPos(p)
     }
     function onAboutDismiss() {
       setDismissed(true)
@@ -165,7 +178,9 @@ function MeshHint({ pinTo = DEFAULT_PIN_SLUG }: { pinTo?: string }) {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-30"
+      // overflow-hidden clips the inner div when the hint slides past the
+      // viewport edge — keeps it from causing horizontal scroll.
+      className="pointer-events-none fixed inset-0 z-30 overflow-hidden"
       style={{
         opacity: dismissed ? 0 : 1,
         transition: "opacity 520ms ease",
@@ -177,8 +192,6 @@ function MeshHint({ pinTo = DEFAULT_PIN_SLUG }: { pinTo?: string }) {
           left: `${pos.x * 100}%`,
           top: `${pos.y * 100}%`,
           transform: "translate(-50%, -50%)",
-          // Slide smoothly between meshes as the picker re-targets.
-          transition: "left 600ms ease-out, top 600ms ease-out",
         }}
       >
         {/* Pulsing ring — sits AROUND the mesh, doesn't cover it */}
