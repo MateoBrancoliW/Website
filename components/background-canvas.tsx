@@ -11,16 +11,16 @@ import { useOverlayNav } from "./use-overlay-nav"
 // ──────────────────────────────────────────────────────────────────────────────
 // Tunables (Mateo's chosen values)
 // ──────────────────────────────────────────────────────────────────────────────
-const DOT_COUNT = 1700
+// More dots, slightly smaller — denser field reads as a richer texture.
+const DOT_COUNT = 2600
 // Sphere scaled further so dots have real depth: at world radius 5.5 and
 // camera at z=5, dots near the front of the sphere pass *very* close to the
 // camera (distance ~0.5 unit → much larger on screen) while back-of-sphere
 // dots are ~10× farther — strong "diving in/out of the page" sensation.
 const DOT_RADIUS = 5.5
-// Larger base size so perspective makes the dot-size range much more
-// noticeable. sizeAttenuation is true on the material so this scales by
-// distance automatically.
-const DOT_SIZE = 0.05
+// sizeAttenuation is true on the material so size scales with distance
+// automatically; this is the base.
+const DOT_SIZE = 0.034
 const DOT_OPACITY = 0.7
 // World rotation bumped up so the shared sphere motion is clearly visible —
 // meshes are children of the same group, so this is what makes them "travel
@@ -331,7 +331,24 @@ function Scene({
   onAboutOpen: () => void
 }) {
   const worldRef = useRef<THREE.Group>(null)
-  const slots = useMemo(() => layoutFeaturedSlots(FEATURED_COUNT), [])
+  const slots = useMemo(() => {
+    const base = layoutFeaturedSlots(FEATURED_COUNT)
+    // The about-me mesh sits at array index 0, which the Fibonacci layout
+    // places at the top pole of the sphere — barely visible on page load
+    // (it lands near y_ndc ≈ +1, clipped to the top edge). Override its
+    // anchor to a front-of-sphere, center-ish position so the user sees it
+    // immediately. It still rotates with the world group, so it'll travel
+    // around the scene over time, just starting from a guaranteed-visible
+    // spot.
+    const aboutIdx = projects.findIndex((p) => p.slug === ABOUT_MESH_SLUG)
+    if (aboutIdx >= 0 && base[aboutIdx]) {
+      base[aboutIdx] = {
+        ...base[aboutIdx],
+        anchor: new THREE.Vector3(1.7, 0.4, 2.2),
+      }
+    }
+    return base
+  }, [])
 
   useFrame((_, dt) => {
     if (worldRef.current) {
