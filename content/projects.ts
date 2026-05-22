@@ -15,6 +15,18 @@ export type Project = {
     ndc?: { x: number; y: number }
   }
   content: string[]
+  /**
+   * Optional markdown body for the project dialog. If set, it's rendered
+   * (and dev-editable) instead of joining `content[]`.
+   */
+  body?: string
+  /**
+   * Optional path to a Jupyter notebook in /public (e.g.
+   * "/notebooks/my-project.ipynb"). If set, the project dialog renders the
+   * notebook instead of the markdown body. Drop the .ipynb into
+   * `public/notebooks/` and point here.
+   */
+  notebook?: string
 }
 
 /**
@@ -46,6 +58,10 @@ export const projects: Project[] = [
       "This project explores particle-driven transitions within a calm UI framework.",
       "Focus areas: frame pacing, perceptual smoothness, and interaction affordances.",
     ],
+    // Demo: this project's dialog renders a Jupyter notebook. Replace with
+    // your own .ipynb in public/notebooks/ (or remove `notebook` to fall
+    // back to the markdown body / content[]).
+    notebook: "/notebooks/sample.ipynb",
   },
   {
     slug: "project-two",

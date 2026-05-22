@@ -94,6 +94,65 @@ Open `http://localhost:3000` (or whatever port it lands on). If you get a 404, d
 
 ---
 
+## 5a. Vercel still shows the OLD project — fixing the sync
+
+The most common cause: **the GitHub repo Vercel watches is not the one your local code lives in.**
+
+When you originally scaffolded with v0.dev, v0 created its own GitHub repo (`mateo-2499s-projects/v0-portfolio-website-rebuild` or similar) and connected Vercel to *that*. Every edit you make on v0.dev pushes to that repo automatically. But changes you make locally on your machine (with me or otherwise) go nowhere unless you push them yourself — and they need to land in the same repo Vercel is watching, or Vercel needs to be repointed.
+
+### Diagnose it in 60 seconds
+
+From the project folder:
+
+```bash
+cd ~/WebSites/PortfolioWebsite
+git status                  # are there uncommitted changes?
+git remote -v               # which GitHub repo is "origin"?
+git log --oneline -5        # the 5 most recent local commits
+```
+
+Then in the Vercel dashboard, open the project → **Settings → Git** and note the connected repository. Compare it to your `git remote -v` output.
+
+Three possibilities:
+
+**(A) Local `origin` and Vercel watch the same repo, but you haven't pushed.**
+You just need to commit and push:
+```bash
+git add -A
+git commit -m "Sync hero / meshes / chrome changes"
+git push origin main      # or whichever branch Vercel watches
+```
+Vercel will rebuild automatically. Done.
+
+**(B) Local `origin` differs from the Vercel-watched repo.**
+Either repoint Vercel, or change your local remote. Easier route is to repoint Vercel:
+1. Vercel → Project → Settings → Git → **Disconnect**.
+2. Reconnect, this time picking the repo your local `origin` points to.
+3. Push your local commits — Vercel deploys from there onward.
+
+**(C) Your local folder isn't a git repo at all** (`git status` complains).
+Initialize it and push to a new GitHub repo:
+```bash
+git init
+git add -A
+git commit -m "Initial commit (local state)"
+# create a new empty repo on GitHub first, then:
+git remote add origin git@github.com:mateobrancoli/portfolio.git
+git branch -M main
+git push -u origin main
+```
+Then in Vercel → New Project → import that new repo.
+
+### Sanity check after pushing
+
+Open the GitHub repo Vercel watches in a browser. The latest commit message should match what you just pushed. If it does, the next Vercel deploy will use the new code (visible in **Deployments** tab — there'll be a new in-progress build). If the GitHub commit isn't there yet, the push silently failed (e.g. wrong branch, auth issue) — re-run `git push` with verbose output: `git push -v origin main`.
+
+### One-time hygiene
+
+While you're in there, make sure the v0.dev auto-push isn't fighting you. If you're still editing on v0.dev *and* locally, v0 will overwrite your local work. Easiest fix once you're committed to local edits: disconnect v0.dev from the repo (v0 dashboard → project settings → GitHub integration → disconnect). After that, the GitHub repo is "yours" — only your local pushes update it.
+
+---
+
 ## 5. Deploying to Vercel
 
 The easiest path:

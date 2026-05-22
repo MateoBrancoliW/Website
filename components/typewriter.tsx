@@ -1,93 +1,116 @@
 "use client"
 
-/**
- * Typewriter — cycles through an array of strings with a CLI-style typing /
- * deleting animation and a blinking underscore cursor.
- *
- * Accessibility: the visible animated text is hidden from screen readers
- * (`aria-hidden`); the parent <span> carries a single `aria-label` listing
- * every descriptor so assistive tech reads the static content once.
- */
-
-import { useEffect, useState } from "react"
-
-type Phase = "typing" | "holdFull" | "deleting" | "holdEmpty"
+import { useEffect, useMemo, useState } from "react"
 
 type Props = {
   items: string[]
-  typingSpeed?: number // ms per char while typing
-  deletingSpeed?: number // ms per char while deleting
-  pauseFullMs?: number // ms to hold the full string before deleting
-  pauseEmptyMs?: number // ms to hold empty before next word
+  typingMs?: number
+  deletingMs?: number
+  holdMs?: number
   className?: string
 }
 
+/**
+ * Character-level typewriter
+ * +
+ * Interactive syllable hover expansion
+ * +
+ * Live inline reflow (neighbor scooching)
+ */
+
 export function Typewriter({
   items,
-  typingSpeed = 65,
-  deletingSpeed = 35,
-  pauseFullMs = 1500,
-  pauseEmptyMs = 350,
+  typingMs = 42,
+  deletingMs = 24,
+  holdMs = 2600,
   className,
 }: Props) {
-  const [index, setIndex] = useState(0)
-  const [text, setText] = useState("")
-  const [phase, setPhase] = useState<Phase>("typing")
+  const [phraseIdx, setPhraseIdx] = useState(0)
+  const [displayText, setDisplayText] = useState("")
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const target = items[phraseIdx % items.length] ?? ""
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Typewriter engine
+  // ───────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (items.length === 0) return
-    const current = items[index % items.length] ?? ""
-    let timer: ReturnType<typeof setTimeout> | null = null
+    let timeout: NodeJS.Timeout
 
-    if (phase === "typing") {
-      if (text.length < current.length) {
-        timer = setTimeout(
-          () => setText(current.slice(0, text.length + 1)),
-          typingSpeed,
-        )
+    if (!isDeleting) {
+      if (displayText.length < target.length) {
+        timeout = setTimeout(() => {
+          setDisplayText(target.slice(0, displayText.length + 1))
+        }, typingMs)
       } else {
-        setPhase("holdFull")
+        timeout = setTimeout(() => {
+          setIsDeleting(true)
+        }, holdMs)
       }
-    } else if (phase === "holdFull") {
-      timer = setTimeout(() => setPhase("deleting"), pauseFullMs)
-    } else if (phase === "deleting") {
-      if (text.length > 0) {
-        timer = setTimeout(
-          () => setText(current.slice(0, text.length - 1)),
-          deletingSpeed,
-        )
+    } else {
+      if (displayText.length > 0) {
+        timeout = setTimeout(() => {
+          setDisplayText(target.slice(0, displayText.length - 1))
+        }, deletingMs)
       } else {
-        setPhase("holdEmpty")
+        setIsDeleting(false)
+        setPhraseIdx((i) => (i + 1) % items.length)
       }
-    } else if (phase === "holdEmpty") {
-      timer = setTimeout(() => {
-        setIndex((i) => (i + 1) % items.length)
-        setPhase("typing")
-      }, pauseEmptyMs)
     }
 
-    return () => {
-      if (timer) clearTimeout(timer)
-    }
-  }, [text, phase, index, items, typingSpeed, deletingSpeed, pauseFullMs, pauseEmptyMs])
+    return () => clearTimeout(timeout)
+  }, [
+    displayText,
+    isDeleting,
+    target,
+    typingMs,
+    deletingMs,
+    holdMs,
+    items.length,
+  ])
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Syllable tokenization
+  // Lightweight heuristic — not linguistic perfection, but visually strong
+  // ───────────────────────────────────────────────────────────────────────────
+
+  const syllables = useMemo(() => {
+    return tokenizeIntoSyllables(displayText)
+  }, [displayText])
 
   return (
-    <span className={className} aria-label={items.join(", ")}>
-      <span aria-hidden="true">
-        {text}
+    <span
+      className={className}
+      aria-label={items.join(", ")}
+    >
+      <span
+        aria-hidden="true"
+        className="inline-flex flex-wrap items-center"
+      >
+        {syllables.map((syl, i) => (
+          <Syllable
+            key={`${phraseIdx}-${i}-${syl.text}`}
+            text={syl.text}
+            trailingSpace={syl.trailingSpace}
+          />
+        ))}
+
         <span className="tw-cursor">_</span>
       </span>
+
       <style jsx>{`
         .tw-cursor {
           display: inline-block;
           margin-left: 1px;
-          /* steps(1) gives a hard on/off snap rather than a CSS-eased blink */
           animation: tw-blink 1.05s steps(1, end) infinite;
         }
+
         @keyframes tw-blink {
           0%, 50% {
             opacity: 1;
           }
+
           50.01%, 100% {
             opacity: 0;
           }
@@ -95,4 +118,87 @@ export function Typewriter({
       `}</style>
     </span>
   )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Interactive syllable
+// ─────────────────────────────────────────────────────────────────────────────
+
+function Syllable({
+  text,
+  trailingSpace,
+}: {
+  text: string
+  trailingSpace: boolean
+}) {
+  return (
+    <span
+      className="tw-syllable pointer-events-auto inline-flex"
+    >
+      {text}
+
+      {trailingSpace && <span>&nbsp;</span>}
+
+      <style jsx>{`
+        .tw-syllable {
+          transition:
+            font-size 180ms ease-out,
+            letter-spacing 180ms ease-out,
+            padding 180ms ease-out,
+            margin 180ms ease-out,
+            font-weight 180ms ease-out;
+
+          font-size: 1em;
+          font-weight: 400;
+
+          padding-left: 0px;
+          padding-right: 0px;
+
+          letter-spacing: 0em;
+        }
+
+        .tw-syllable:hover {
+          font-size: 1.12em;
+
+          font-weight: 650;
+
+          letter-spacing: 0.025em;
+
+          padding-left: 0.03em;
+          padding-right: 0.08em;
+        }
+      `}</style>
+    </span>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Syllable tokenizer
+// Not linguistically perfect — optimized for visual rhythm
+// ─────────────────────────────────────────────────────────────────────────────
+
+function tokenizeIntoSyllables(input: string) {
+  const words = input.split(/(\s+)/)
+
+  const output: {
+    text: string
+    trailingSpace: boolean
+  }[] = []
+
+  for (const chunk of words) {
+    if (chunk.trim() === "") continue
+
+    const syllables = chunk.match(
+      /[^aeiouy]*[aeiouy]+(?:[^aeiouy]{1,2}(?=[^aeiouy]|$))?/gi
+    ) || [chunk]
+
+    syllables.forEach((syl, idx) => {
+      output.push({
+        text: syl,
+        trailingSpace: idx === syllables.length - 1,
+      })
+    })
+  }
+
+  return output
 }

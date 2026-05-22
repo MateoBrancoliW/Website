@@ -54,7 +54,16 @@ export function HeroNameTag({ name = "Mateo Brancoli" }: { name?: string }) {
             <NameWord key={`${word}-${i}`} word={word} />
           ))}
         </h1>
-        <p className="mt-1 font-bold text-lg md:mt-2 md:text-2xl lg:text-3xl">
+        {/* Stabilized vertical: fixed line-height AND fixed height.
+            The Typewriter wraps syllables in an `inline-flex` whose
+            intrinsic height grows with hover-scaled children — that growth
+            would push the wrapping flex layout up, which then makes the
+            outer `items-center` re-center the block and visually shifts
+            the name. Locking BOTH `leading-*` (line-height) and `h-*`
+            (container height) keeps the <p>'s box rigid; the hover-scaled
+            syllable overflows the box visually but the layout doesn't
+            move. */}
+        <p className="mt-1 font-bold text-lg leading-7 h-8 md:mt-2 md:text-2xl md:leading-9 md:h-10 lg:text-3xl lg:leading-10 lg:h-12">
           <Typewriter items={DESCRIPTORS} />
         </p>
       </div>

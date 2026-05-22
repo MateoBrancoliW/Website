@@ -58,20 +58,19 @@ export type FeaturedModel =
 export const featuredModels: FeaturedModel[] = [
   // index 0 — about-me mesh. Larger + vivid pure-cyan input → on white this
   // shows as RED. Stands out as the headline shape.
-  { kind: "geom", shape: "icosa", scale: 1.4, materialVariant: "solid", color: "#00ffff", blendMode: "negative" },
-  // indexes 1–10 — project meshes. Each gets a different input color so on
-  // a white background they show as different inverse colors.
-  { kind: "geom", shape: "octa",   scale: 1.0, materialVariant: "solid", color: "#ff00ff", blendMode: "negative" }, // → green
-  { kind: "geom", shape: "dodeca", scale: 1.0, materialVariant: "solid", color: "#ffff00", blendMode: "negative" }, // → blue
-  { kind: "geom", shape: "knot",   scale: 1.0, materialVariant: "solid", color: "#ff8800", blendMode: "negative" }, // → cyan-blue
-  { kind: "geom", shape: "torus",  scale: 1.0, materialVariant: "solid", color: "#00ff88", blendMode: "negative" }, // → pink
-  { kind: "geom", shape: "tetra",  scale: 1.0, materialVariant: "wire",  color: "#8800ff", blendMode: "negative" }, // → green-yellow
-  { kind: "geom", shape: "icosa",  scale: 1.0, materialVariant: "wire",  color: "#ff0044", blendMode: "negative" }, // → cyan-green
-  { kind: "geom", shape: "octa",   scale: 1.0, materialVariant: "solid", color: "#00ff00", blendMode: "negative" }, // → magenta
-  { kind: "geom", shape: "dodeca", scale: 1.0, materialVariant: "wire",  color: "#ff0000", blendMode: "negative" }, // → cyan
-  { kind: "geom", shape: "knot",   scale: 1.0, materialVariant: "solid", color: "#0000ff", blendMode: "negative" }, // → yellow
-  { kind: "geom", shape: "icosa",  scale: 1.0, materialVariant: "solid", color: "#ffaa00", blendMode: "negative" }, // → blue
-  // indexes 11–12 — extra meshes.
-  { kind: "geom", shape: "torus",  scale: 1.0, materialVariant: "wire",  color: "#00aaff", blendMode: "negative" }, // → orange
-  { kind: "geom", shape: "tetra",  scale: 1.0, materialVariant: "solid", color: "#aa00ff", blendMode: "negative" }, // → yellow-green
+  { kind: "geom", shape: "dodeca", scale: 1.4, materialVariant: "solid", color: "#93e39d", blendMode: "negative" },
+
+  //NEW
+  { kind: "stl", path: "/models/bonsai.stl", scale: 2.5, materialVariant: "solid", color: "#c90280", blendMode: "negative" },
+  { kind: "stl", path: "/models/kart.stl", scale: 2.5, materialVariant: "solid", color: "#024bc9", blendMode: "negative" },
+  { kind: "stl", path: "/models/dron.stl", scale: 2.5, materialVariant: "solid", color: "#dabe6a", blendMode: "negative" },
+  { kind: "stl", path: "/models/grating.stl", scale: 2.5, materialVariant: "solid", color: "#dae5d9", blendMode: "negative" },
+  { kind: "stl", path: "/models/spectrometer.stl", scale: 2.2, materialVariant: "solid", color: "#ade1f4", blendMode: "negative" },
+  { kind: "stl", path: "/models/rocky.stl", scale: 2.5, materialVariant: "solid", color: "#00ffff", blendMode: "negative" },
+  { kind: "stl", path: "/models/dogbone.stl", scale: 2.5, materialVariant: "solid", color: "#636a6a", blendMode: "negative" },
+  { kind: "stl", path: "/models/si-ph.stl", scale: 2.5, materialVariant: "solid", color: "#8800ff", blendMode: "negative" },
+  { kind: "stl", path: "/models/board.stl", scale: 2.5, materialVariant: "solid", color: "#d3708a", blendMode: "negative" },
+  { kind: "stl", path: "/models/wheelchair.stl", scale: 2.2, materialVariant: "solid", color: "#00ff00", blendMode: "negative" },
+  { kind: "stl", path: "/models/blinknano.stl", scale: 2.5, materialVariant: "solid", color: "#7f7f00", blendMode: "negative" },
+
 ]

@@ -1,60 +1,85 @@
 "use client"
 
 /**
- * Page chrome — the four small pieces of UI pinned to the viewport corners.
- *   • Top-right:    "Contact" (bold text, opens ContactDialog)
- *   • Bottom-left:  "© 2027" copyright
+ * Page chrome — corner UI pinned to the viewport.
+ *   • Top-right:    word-tab nav (About Me / Projects / Publications / Contact)
+ *   • Bottom-left:  "© <year>" copyright
  *   • Bottom-right: "MBW" initials
  *
  * Style notes:
- *   • Every text is bold and rendered with `mix-blend-mode: difference` +
- *     `color: white` — same trick as <HeroNameTag /> — so the text inverts
- *     dots/meshes passing behind it, and stays readable on white backgrounds.
- *     This means PageChrome MUST be mounted inside the same isolation parent
- *     as the BackgroundCanvas (see app/page.tsx).
- *   • Each item fades in on mount with the same `hero-fade` keyframe used by
- *     the name header, so the page lands as a coordinated whole.
- *   • Only Contact has `pointer-events-auto` — the corner texts are static.
+ *   • Everything is bold + `mix-blend-mode: difference` + `color: white`
+ *     (same trick as <HeroNameTag />) so text inverts dots/meshes behind it
+ *     and stays readable on white. PageChrome MUST therefore be mounted
+ *     inside the same isolation parent as <BackgroundCanvas /> (app/page.tsx).
+ *   • Each item fades in on mount via the `chrome-fade` keyframe.
+ *   • Nav magnify: all tabs share one font size; hovering one scales it up
+ *     while the siblings shrink slightly. The fade-in lives on the <button>
+ *     (translateY) and the hover scale lives on an INNER <span>, so the two
+ *     transforms never fight.
+ *   • Single-line classNames are intentional — styled-jsx below doesn't
+ *     escape newlines spliced into className attributes.
  */
 
+import { useState } from "react"
 import { useOverlayNav } from "./use-overlay-nav"
 
 export function PageChrome() {
-  const { openContact } = useOverlayNav()
+  const { openAbout, openContact, openPublications, openProjects } = useOverlayNav()
+  const [hovered, setHovered] = useState<number | null>(null)
+
+  // Top-to-bottom order: About Me → Publications → Projects → Contact.
+  const tabs = [
+    { label: "About Me", onClick: openAbout },
+    { label: "Publications", onClick: openPublications },
+    { label: "Projects", onClick: openProjects },
+    { label: "Contact", onClick: openContact },
+  ]
 
   return (
     <div
       aria-hidden="false"
       className="pointer-events-none absolute inset-0"
-      style={{
-        mixBlendMode: "difference",
-        color: "white",
-      }}
+      style={{ mixBlendMode: "difference", color: "white" }}
     >
-      {/* Top-right — Contact (the only interactive piece).
-          Note: single-line classNames are intentional in this file because
-          <style jsx> below doesn't escape newlines in className attributes. */}
-      <button
-        type="button"
-        onClick={openContact}
-        className="pointer-events-auto chrome-fade absolute right-6 top-5 md:right-10 md:top-6 text-sm font-bold uppercase tracking-[0.18em] transition-transform duration-200 ease-out hover:scale-[1.06] focus:outline-none"
-        style={{ animationDelay: "120ms" }}
-      >
-        Contact
-      </button>
+      {/* Top-right nav — right-aligned column of equal-size word-tabs. */}
+      <nav className="absolute right-6 top-5 flex flex-col items-end gap-1 md:right-10 md:top-6">
+        {tabs.map((tab, i) => {
+          // Magnify the hovered tab, shrink the rest. Neutral (1) when none
+          // is hovered.
+          const scale = hovered === null ? 1 : hovered === i ? 1.18 : 0.88
+          return (
+            <button
+              key={tab.label}
+              type="button"
+              onClick={tab.onClick}
+              onMouseEnter={() => setHovered(i)}
+              onMouseLeave={() => setHovered((h) => (h === i ? null : h))}
+              className="pointer-events-auto chrome-fade text-base lg:text-lg font-bold uppercase tracking-[0.18em] focus:outline-none"
+              style={{ animationDelay: `${120 + i * 60}ms` }}
+            >
+              <span
+                className="inline-block transition-transform duration-200 ease-out"
+                style={{ transform: `scale(${scale})`, transformOrigin: "right center" }}
+              >
+                {tab.label}
+              </span>
+            </button>
+          )
+        })}
+      </nav>
 
-      {/* Bottom-left — copyright */}
+      {/* Bottom-left — copyright. */}
       <div
-        className="chrome-fade absolute bottom-5 left-6 md:bottom-6 md:left-10 text-xs font-bold uppercase tracking-[0.18em]"
-        style={{ animationDelay: "260ms" }}
+        className="chrome-fade absolute bottom-2 left-3 md:bottom-3 md:left-4 text-xs font-bold uppercase tracking-[0.18em]"
+        style={{ animationDelay: "360ms" }}
       >
         © {new Date().getFullYear()}
       </div>
 
-      {/* Bottom-right — initials */}
+      {/* Bottom-right — initials. */}
       <div
-        className="chrome-fade absolute bottom-5 right-6 md:bottom-6 md:right-10 text-xs font-bold uppercase tracking-[0.18em]"
-        style={{ animationDelay: "320ms" }}
+        className="chrome-fade absolute bottom-2 right-3 md:bottom-3 md:right-4 text-xs font-bold uppercase tracking-[0.18em]"
+        style={{ animationDelay: "420ms" }}
       >
         MBW
       </div>

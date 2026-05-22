@@ -205,9 +205,11 @@ function MeshHint({ pinTo = DEFAULT_PIN_SLUG }: { pinTo?: string }) {
             style={{ animation: "hintPulse 1.8s ease-out infinite", animationDelay: "600ms" }}
           />
         </span>
-        {/* Label tucked just below */}
+        {/* Label tucked just below — the affordance is click (not hover);
+            hovering shows the project preview, clicking is what dismisses
+            the hint and opens the About dialog. */}
         <div className="absolute left-1/2 top-[calc(100%+4px)] -translate-x-1/2 whitespace-nowrap rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-gray-600 shadow-sm backdrop-blur">
-          Hover me
+          Click me
         </div>
       </div>
       <style jsx>{`

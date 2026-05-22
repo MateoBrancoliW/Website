@@ -107,9 +107,11 @@ export function ProjectLocatorsOverlay({ items, className, fixed = false }: Prop
             className={cn("absolute transition-opacity", it.visible ? "opacity-100" : "opacity-0")}
             style={{ left, top, transform: "translate(-50%, -50%)" }}
           >
-            <div className="pointer-events-none absolute left-1/2 top-[calc(100%+12px)] z-10 -translate-x-1/2 whitespace-normal">
-              <div className="w-56 overflow-hidden rounded-xl border border-black/10 bg-white/90 shadow-lg backdrop-blur">
-                <div className="relative aspect-[3/2] w-full bg-gray-100">
+            {/* Horizontal pill (circle thumb + text). Roomier than before —
+                bigger thumb, larger type, wider container. Still translucent. */}
+            <div className="pointer-events-none absolute left-1/2 top-[calc(100%+16px)] z-10 -translate-x-1/2 whitespace-normal">
+              <div className="flex w-80 items-center gap-4 rounded-full border border-black/10 bg-white/35 px-4 py-3 shadow-md backdrop-blur-md">
+                <div className="relative aspect-square w-14 shrink-0 overflow-hidden rounded-full ring-1 ring-black/10">
                   <Image
                     src={it.image ?? "/placeholder.svg?height=240&width=360&query=minimal%20project%20preview"}
                     alt={`${it.title} preview`}
@@ -117,9 +119,9 @@ export function ProjectLocatorsOverlay({ items, className, fixed = false }: Prop
                     className="object-cover"
                   />
                 </div>
-                <div className="p-3">
-                  <div className="text-xs font-medium text-gray-900">{it.title}</div>
-                  <div className="mt-1 line-clamp-3 text-[11px] text-gray-600">{it.description}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-gray-900">{it.title}</div>
+                  <div className="line-clamp-2 text-xs leading-snug text-gray-700">{it.description}</div>
                 </div>
               </div>
             </div>
