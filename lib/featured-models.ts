@@ -58,7 +58,7 @@ export type FeaturedModel =
 export const featuredModels: FeaturedModel[] = [
   // index 0 — about-me mesh. Larger + vivid pure-cyan input → on white this
   // shows as RED. Stands out as the headline shape.
-  { kind: "geom", shape: "dodeca", scale: 1.4, materialVariant: "solid", color: "#93e39d", blendMode: "negative" },
+  { kind: "geom", shape: "dodecac", scale: 1.4, materialVariant: "solid", color: "#93e39d", blendMode: "negative" },
 
   //NEW
   { kind: "stl", path: "/models/bonsai.stl", scale: 2.5, materialVariant: "solid", color: "#c90280", blendMode: "negative" },
