@@ -98,44 +98,156 @@ const DRIFT_SPEED = 0.3
 // ──────────────────────────────────────────────────────────────────────────────
 // Background dot field
 // ──────────────────────────────────────────────────────────────────────────────
+//
+// Rendered with a small custom shader instead of <pointsMaterial>, which can
+// only draw hard-edged *squares* (and lets near-camera dots balloon into big
+// gray blocks). The shader gives us:
+//   • Round, anti-aliased dots — the edge is smoothed over ~1 device pixel at
+//     any size, so small dots stay crisp and big ones don't look jagged.
+//   • Size variation — each dot gets a random size multiplier, so the field
+//     reads as dust at different scales instead of a uniform grid of specks.
+//   • Depth cues — dots fade with distance (atmospheric perspective) and fade
+//     out as they pass very close to the camera, instead of popping in as
+//     giant squares. Point size is also clamped.
+//   • A slow, subtle twinkle — opacity breathes per-dot on its own clock.
+// `dotSize` keeps the same world-space meaning as before (three's
+// sizeAttenuation formula), so the dev-panel sliders behave as they did.
+
+const DOT_COLOR = "#101010"
+const DOT_MAX_PX = 9 // CSS px; clamp so near-camera dots never become blobs
+const DOT_SIZE_JITTER: [number, number] = [0.8, 1.5] // per-dot size multiplier range
+const DOT_TWINKLE = 0.18 // 0 = off; fraction of opacity that breathes
+
+const dotVertexShader = /* glsl */ `
+  uniform float uSize;
+  uniform float uScale;     // half the drawing-buffer height, in device px
+  uniform float uMaxPx;     // max point size, in device px
+  uniform float uTime;
+  uniform float uTwinkle;
+  attribute float aScale;
+  attribute float aPhase;
+  varying float vAlpha;
+  varying float vPx;
+
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    float depth = -mv.z;
+    gl_Position = projectionMatrix * mv;
+
+    float px = uSize * aScale * (uScale / max(depth, 0.001));
+    px = min(px, uMaxPx);
+    gl_PointSize = max(px, 1.0);
+    vPx = gl_PointSize;
+
+    // Far fade: full strength up close, ~55% at the back of the field.
+    float far = 1.0 - smoothstep(4.0, 11.0, depth) * 0.45;
+    // Near fade: dots whose depth drops below ~1.4 dissolve instead of popping.
+    float near = smoothstep(0.35, 1.4, depth);
+    // Sub-pixel dots get dimmer rather than flickering at 1px.
+    float tiny = clamp(px * 0.6 + 0.4, 0.0, 1.0);
+    // Slow per-dot twinkle.
+    float tw = 1.0 - uTwinkle * (0.5 + 0.5 * sin(uTime * (0.6 + aPhase * 0.25) + aPhase * 6.2831));
+
+    vAlpha = far * near * tiny * tw;
+  }
+`
+
+const dotFragmentShader = /* glsl */ `
+  uniform vec3 uColor;
+  uniform float uOpacity;
+  varying float vAlpha;
+  varying float vPx;
+
+  void main() {
+    // Distance from the sprite centre, 0 at centre, 0.5 at the edge.
+    float d = length(gl_PointCoord - 0.5);
+    // Smooth the rim over ~1 device pixel regardless of dot size.
+    float aa = 1.0 / max(vPx, 1.0);
+    float a = 1.0 - smoothstep(0.5 - aa, 0.5, d);
+    a *= vAlpha * uOpacity;
+    if (a < 0.003) discard;
+    gl_FragColor = vec4(uColor, a);
+  }
+`
+
+/** Small deterministic PRNG so the field is identical across reloads. */
+function mulberry32(seed: number) {
+  return () => {
+    seed |= 0
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 function DotField() {
   const { dotCount, dotSize, dotOpacity, dotRadius } = useDevTheme()
 
-  const positions = useMemo(() => {
-    const arr = new Float32Array(dotCount * 3)
+  const { positions, scales, phases } = useMemo(() => {
+    const rand = mulberry32(1337)
+    const positions = new Float32Array(dotCount * 3)
+    const scales = new Float32Array(dotCount)
+    const phases = new Float32Array(dotCount)
+    const [sMin, sMax] = DOT_SIZE_JITTER
     for (let i = 0; i < dotCount; i++) {
-      const r = dotRadius * Math.cbrt(Math.random())
-      const u = Math.random()
-      const v = Math.random()
-      const theta = 2 * Math.PI * u
-      const phi = Math.acos(2 * v - 1)
-      arr[i * 3] = r * Math.sin(phi) * Math.cos(theta)
-      arr[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta)
-      arr[i * 3 + 2] = r * Math.cos(phi)
+      const r = dotRadius * Math.cbrt(rand())
+      const theta = 2 * Math.PI * rand()
+      const phi = Math.acos(2 * rand() - 1)
+      positions[i * 3] = r * Math.sin(phi) * Math.cos(theta)
+      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta)
+      positions[i * 3 + 2] = r * Math.cos(phi)
+      // Skew toward small dots (most are dust; a few are larger motes).
+      const k = rand()
+      scales[i] = sMin + (sMax - sMin) * Math.pow(k, 1.6)
+      phases[i] = rand()
     }
-    return arr
+    return { positions, scales, phases }
   }, [dotCount, dotRadius])
 
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        vertexShader: dotVertexShader,
+        fragmentShader: dotFragmentShader,
+        uniforms: {
+          uSize: { value: 0 },
+          uScale: { value: 1 },
+          uMaxPx: { value: DOT_MAX_PX },
+          uTime: { value: 0 },
+          uTwinkle: { value: DOT_TWINKLE },
+          uColor: { value: new THREE.Color(DOT_COLOR) },
+          uOpacity: { value: 1 },
+        },
+        transparent: true,
+        // Dots don't occlude each other (no square "cut-outs" between
+        // overlapping sprites) but are still hidden behind solid meshes.
+        depthWrite: false,
+      }),
+    [],
+  )
+  useEffect(() => () => material.dispose(), [material])
+
+  useFrame((state) => {
+    const u = material.uniforms
+    const dpr = state.gl.getPixelRatio()
+    u.uSize.value = dotSize
+    u.uOpacity.value = dotOpacity
+    u.uScale.value = state.size.height * dpr * 0.5
+    u.uMaxPx.value = DOT_MAX_PX * dpr
+    u.uTime.value = state.clock.elapsedTime
+  })
+
   return (
-    <points>
+    <points material={material} frustumCulled={false}>
       {/* `key={dotCount}` forces React to discard and recreate the buffer
           when the array length changes — otherwise the GPU buffer would be
           out of sync with the JS array and you'd see stale dots. */}
-      <bufferGeometry key={dotCount}>
-        <bufferAttribute
-          attach="attributes-position"
-          count={positions.length / 3}
-          array={positions}
-          itemSize={3}
-        />
+      <bufferGeometry key={`${dotCount}-${dotRadius}`}>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute attach="attributes-aScale" args={[scales, 1]} />
+        <bufferAttribute attach="attributes-aPhase" args={[phases, 1]} />
       </bufferGeometry>
-      <pointsMaterial
-        size={dotSize}
-        sizeAttenuation
-        color="#101010"
-        opacity={dotOpacity}
-        transparent
-      />
     </points>
   )
 }
