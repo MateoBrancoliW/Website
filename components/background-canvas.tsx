@@ -4,6 +4,7 @@ import { Canvas, useFrame, useLoader, useThree, type ThreeEvent } from "@react-t
 import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import * as THREE from "three"
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader"
+import { useGLTF } from "@react-three/drei"
 import { projects } from "@/content/projects"
 import { featuredModels, type FeaturedModel } from "@/lib/featured-models"
 import { updateLocatorFromObject } from "@/lib/locator-bridge"
@@ -95,6 +96,33 @@ const HOVER_SPIN_RATE = 1.5
 const DRIFT_AMPLITUDE = 0.06
 const DRIFT_SPEED = 0.3
 
+// Entrance animation. Every mesh (procedural or loaded) grows in from zero
+// instead of popping into existence the frame its file finishes loading.
+// Meshes are staggered by slot index so they arrive as a gentle cascade even
+// when all the files land at once.
+const APPEAR_DURATION = 0.9 // seconds
+const APPEAR_STAGGER = 0.08 // seconds between consecutive slots
+
+// Time (s) the first featured mesh rendered. Stagger delays are measured from
+// here, so a model that finishes loading late appears right away instead of
+// waiting out its full stagger again.
+let sceneT0: number | null = null
+
+/** easeOutBack — overshoots slightly, then settles. */
+function easeOutBack(x: number) {
+  const c1 = 1.4
+  const c3 = c1 + 1
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2)
+}
+
+// Kick off every model download as soon as this module loads (client only),
+// in parallel, rather than one-by-one as each mesh component mounts.
+if (typeof window !== "undefined") {
+  for (const m of featuredModels) {
+    if (m.kind === "glb") useGLTF.preload(m.path)
+  }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Background dot field
 // ──────────────────────────────────────────────────────────────────────────────
@@ -161,7 +189,10 @@ function DotField() {
 //                            (bbox → uniform scale → center → vertex
 //                            normals), then renders the shell.
 //
-// Scene picks the right one with a plain `if (model.kind === "stl")`. STL
+//   • <GLBFeaturedMesh>    → same, for optimized .glb files from `pnpm models`
+//                            (the default — see lib/featured-models.ts).
+//
+// Scene picks the right one by `model.kind`. Loaded
 // instances are wrapped individually in <Suspense> so one slow STL doesn't
 // block other meshes from rendering.
 // ──────────────────────────────────────────────────────────────────────────────
@@ -187,6 +218,8 @@ type SharedMeshProps = {
   colorOverride: string
   opacity: number
   engagement: Engagement
+  /** This slot's place in the entrance cascade, in seconds after the first mesh. */
+  appearDelay: number
 }
 
 type ShellProps = SharedMeshProps & {
@@ -207,11 +240,13 @@ function FeaturedMeshShell({
   opacity,
   geometry,
   engagement,
+  appearDelay,
 }: ShellProps) {
   const groupRef = useRef<THREE.Group>(null) // drift + pulse/hover scale
   const meshRef = useRef<THREE.Mesh>(null) // visible mesh; spins
   const [hovered, setHovered] = useState(false)
   const hoverTRef = useRef(0) // eased 0..1
+  const appearStartRef = useRef<number | null>(null) // clock time of first frame
   const { camera } = useThree()
 
   // Reset body cursor on unmount so a stale "pointer" doesn't linger.
@@ -244,6 +279,16 @@ function FeaturedMeshShell({
 
     const t = performance.now() * 0.001
 
+    // Entrance: 0 → 1 over APPEAR_DURATION. Starts at the later of "now"
+    // (first frame after this mesh mounted / its model loaded) and this
+    // slot's place in the cascade.
+    if (sceneT0 === null) sceneT0 = t
+    if (appearStartRef.current === null) appearStartRef.current = Math.max(t, sceneT0 + appearDelay)
+    const appearRaw = (t - appearStartRef.current) / APPEAR_DURATION
+    const appear = appearRaw <= 0 ? 0 : appearRaw >= 1 ? 1 : easeOutBack(appearRaw)
+    // Hide entirely until the entrance starts (scale 0 can still z-fight).
+    group.visible = appearRaw > 0
+
     // Ease hover 0..1
     const target = hovered ? 1 : 0
     hoverTRef.current += (target - hoverTRef.current) * Math.min(1, dt * HOVER_LERP_SPEED)
@@ -252,7 +297,7 @@ function FeaturedMeshShell({
     // collider scales with the visible mesh and always wraps it.
     const pulse = 1 + Math.sin(t * PULSE_FREQ + phase) * PULSE_AMOUNT
     const hoverScale = 1 + hoverTRef.current * (HOVER_SCALE_MAX - 1)
-    group.scale.setScalar(pulse * hoverScale)
+    group.scale.setScalar(Math.max(appear, 1e-4) * pulse * hoverScale)
 
     // Drift the group around the slot anchor.
     const ts = t * DRIFT_SPEED
@@ -344,8 +389,8 @@ class STLLoadBoundary extends Component<
   componentDidCatch(error: unknown) {
     // eslint-disable-next-line no-console
     console.warn(
-      `[BackgroundCanvas] STL failed to load (check the file exists in ` +
-        `public/models/ and the path/case matches): ${this.props.path}`,
+      `[BackgroundCanvas] model failed to load (check the file exists in ` +
+        `public/models/ — run \`pnpm models\` — and the path/case matches): ${this.props.path}`,
       error,
     )
   }
@@ -379,18 +424,83 @@ function STLFeaturedMesh(props: SharedMeshProps) {
   //     thin but actually visible. Drop in any STL with scale: 1 and it
   //     should sit alongside the geom shapes without further tweaking.
   const geometry = useMemo(() => {
-    const g = loaded.clone()
-    g.center()
-    g.computeBoundingSphere()
-    const sphere = g.boundingSphere
-    const radius = sphere?.radius ?? 1
-    const norm = (props.baseScale * stlModel.scale) / Math.max(radius, 1e-6)
-    g.scale(norm, norm, norm)
+    const g = normalizeGeometry(loaded.clone(), props.baseScale * stlModel.scale)
     g.computeVertexNormals()
     return g
   }, [loaded, props.baseScale, stlModel.scale])
 
   return <FeaturedMeshShell {...props} geometry={geometry} />
+}
+
+// ─── GLB specialization — optimized models from `pnpm models` ───────────────
+// These are decimated + meshopt-compressed (≈100 KB each vs. 5–25 MB STLs).
+// drei's useGLTF decodes meshopt in WASM off the hot path, and every file was
+// already requested in parallel by the preload at the top of this module.
+function GLBFeaturedMesh(props: SharedMeshProps) {
+  const glbModel = props.model as Extract<FeaturedModel, { kind: "glb" }>
+  const gltf = useGLTF(glbModel.path)
+
+  const geometry = useMemo(
+    () => normalizeGeometry(extractGeometry(gltf.scene), props.baseScale * glbModel.scale),
+    [gltf, props.baseScale, glbModel.scale],
+  )
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  return <FeaturedMeshShell {...props} geometry={geometry} />
+}
+
+/**
+ * Pull the first mesh's geometry out of a loaded glTF scene as a plain,
+ * float, non-shared BufferGeometry in model space.
+ *
+ * The optimizer quantizes positions (int16 + a node transform that maps them
+ * back to real units), so we read every vertex through `getX/Y/Z` — which
+ * de-normalizes — into a fresh Float32Array, then bake the node's world
+ * transform in. Without this the shape comes out squashed into a unit cube.
+ */
+function extractGeometry(root: THREE.Object3D): THREE.BufferGeometry {
+  let found: THREE.Mesh | null = null
+  root.traverse((o) => {
+    if (!found && (o as THREE.Mesh).isMesh) found = o as THREE.Mesh
+  })
+  const mesh = found as THREE.Mesh | null
+  if (!mesh) return new THREE.SphereGeometry(1, 16, 12)
+
+  root.updateMatrixWorld(true)
+  const src = mesh.geometry.getAttribute("position")
+  const pos = new Float32Array(src.count * 3)
+  for (let i = 0; i < src.count; i++) {
+    pos[i * 3] = src.getX(i)
+    pos[i * 3 + 1] = src.getY(i)
+    pos[i * 3 + 2] = src.getZ(i)
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3))
+  const index = mesh.geometry.getIndex()
+  if (index) g.setIndex(index.clone())
+  g.applyMatrix4(mesh.matrixWorld)
+  return g
+}
+
+/**
+ * Center a geometry and scale it so its BOUNDING-SPHERE radius equals
+ * `targetRadius`. Mutates and returns `g`.
+ *
+ * Why bounding sphere (not bounding box max-dim):
+ *   • A geom shape like IcosahedronGeometry(r) has bounding-sphere radius r.
+ *     Matching models to the same sphere radius makes them visually
+ *     comparable in screen size regardless of CAD authoring scale.
+ *   • Box max-dim normalization makes FLAT objects (e.g. the grating)
+ *     paper-thin. With sphere normalization they stay thin but visible.
+ */
+function normalizeGeometry(g: THREE.BufferGeometry, targetRadius: number) {
+  g.center()
+  g.computeBoundingSphere()
+  const radius = g.boundingSphere?.radius ?? 1
+  const norm = targetRadius / Math.max(radius, 1e-6)
+  g.scale(norm, norm, norm)
+  g.computeBoundingSphere()
+  return g
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -656,6 +766,7 @@ function Scene({
             meshColorSeed > 0 ? randomMeshColor(i, meshColorSeed) : meshColorOverride,
           opacity: meshOpacity,
           engagement,
+          appearDelay: i * APPEAR_STAGGER,
           onSelect: () => {
             if (isAbout) {
               // Tell the onboarding hint it can disappear now — the user
@@ -668,13 +779,13 @@ function Scene({
           },
         }
 
-        // STL meshes load async via useLoader → wrap each in its own
+        // Loaded models (GLB / STL) load async → wrap each in its own
         // Suspense boundary (catches loading) AND an STLLoadBoundary
-        // (catches errors like a 404 on the .stl file). On failure the
+        // (catches errors like a 404 on the file). On failure the
         // boundary renders a wireframe placeholder (dev) so it's obvious
         // which slot's file is missing; in prod it renders nothing.
         // Geom meshes are synchronous — no Suspense / boundary needed.
-        if (model.kind === "stl") {
+        if (model.kind === "stl" || model.kind === "glb") {
           const fallback =
             process.env.NODE_ENV === "development" ? (
               <GeomFeaturedMesh
@@ -692,7 +803,7 @@ function Scene({
           return (
             <STLLoadBoundary key={project.slug} path={model.path} fallback={fallback}>
               <Suspense fallback={null}>
-                <STLFeaturedMesh {...shared} />
+                {model.kind === "glb" ? <GLBFeaturedMesh {...shared} /> : <STLFeaturedMesh {...shared} />}
               </Suspense>
             </STLLoadBoundary>
           )
